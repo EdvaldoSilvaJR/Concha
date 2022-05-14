@@ -5,6 +5,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+
+
+
+
 #define tam_comando 100
 
 // Se flag_pos == 0 então |  pipe
@@ -20,7 +24,7 @@ int flag_pos=0, pos_atual=0 , tam_atual=0;
 //int fd[2];
 
 // função para pegar as posições em linha de cada operador
-int posicoes_comandos(int argc, char **argv, int *posicoes)
+int posicoes_comandos(int argc, char **argv)
 {
 	posicoes[0] = 0 ;
 	int total_comandos = 1,i;
@@ -31,12 +35,10 @@ int posicoes_comandos(int argc, char **argv, int *posicoes)
 	{
 		if(strcmp(argv[i] , "|") == 0)
 		{
-			posicoes[total_comandos] = i;
 			total_comandos ++;
 		}
 		else if(strcmp(argv[i] , "||") == 0)
 		{
-			posicoes[total_comandos] = i;
 			total_comandos ++;
 		}
 		else if(strcmp(argv[i] , "&") == 0)
@@ -47,7 +49,6 @@ int posicoes_comandos(int argc, char **argv, int *posicoes)
 		}
 		else if(strcmp(argv[i] , "&&") == 0)
 		{
-			posicoes[total_comandos] = i;
 			total_comandos ++;
 		}
 
@@ -59,7 +60,7 @@ int posicoes_comandos(int argc, char **argv, int *posicoes)
 }
 
 //monta o comando atual dado a pos atual (linha atual)
-char **monta_comando(int argc, int total, int *posicoes, char **argv)
+char **monta_comando(int argc, int total, char **argv)
 {
 	int i,cont=0;
 	char **comando;
@@ -92,7 +93,7 @@ char **monta_comando(int argc, int total, int *posicoes, char **argv)
 	return comando;
 }
 
-void operador_atual(char **argv, int argc,int *posicoes)
+void operador_atual(char **argv, int argc)
 {
 	// Se flag_pos == 0 então |  pipe
 	// Se flag_pos == 1 então || or
@@ -170,6 +171,11 @@ int executa_comando(char **input, int flag, int *status, int fd)
 
 		execvp(input[0],input);
 	}
+	//executa o comando no background
+	else if(flag_pos == 3)
+	{
+		waitpid(-1,&status,WNOHANG);
+	}
 	else
 	{
 
@@ -199,42 +205,45 @@ int executa_comando(char **input, int flag, int *status, int fd)
 int main(int argc, char **argv) 
 {
 	char **cmd, **cmd2;
-	int *posicoes, qt_comandos;
-	int saida = 0;
+	int qt_comandos;
 	int i,aux=0;
 	int status=0, status_aux = -1;
 	
 	int fd=0;
 
-	posicoes = malloc( sizeof (int) * argc);
-	qt_comandos = posicoes_comandos(argc, argv, posicoes);
+	qt_comandos = posicoes_comandos(argc, argv);
 
 	//printf("quantidade de comandos : %d \n", qt_comandos);
 
 	tam_atual = argc;
-	printf("qt_comandos %d\n",qt_comandos);
 	
-
 	//temos apenas 1 comando
-	if(qt_comandos == 1)
+	if(qt_comandos == 1 && flag_pos!=3)
 	{
 		cmd = &argv[1];
 		execvp(cmd[0],cmd);
 	}
+	//temos caso de comando &
+	else if(flag_pos == 3)
+	{
+		cmd = &argv[1];
+		fd = executa_comando(cmd,3,&status,fd);
+		scanf("%s",argv);
+	}
 	//teremos mais de um comando
-	else
+	else if( flag_pos == 3 || qt_comandos > 1)
 	{
 		while(aux<qt_comandos)
 		{
 			//printf("aux :%d\n", aux);
-			cmd = monta_comando(argc,qt_comandos,posicoes,argv);
+			cmd = monta_comando(argc,qt_comandos,argv);
 			//close(fd[0]);
 			//close(fd[1]);
 			//primeiro comando 
 			if(aux == 0)
 			{
 				printf("comando primeiro \n");
-				operador_atual(argv,argc,posicoes);
+				operador_atual(argv,argc);
 				printf("flag_pos:%d e status_aux:%d \n",flag_pos,status_aux);
 				fd = executa_comando(cmd,0,&status,fd);
 			}
@@ -244,7 +253,7 @@ int main(int argc, char **argv)
 			{
 				printf("comando final , pos atual : %d\n",pos_atual);
 				printf("flag_pos:%d e status_aux:%d \n",flag_pos,status_aux);
-				operador_atual(argv,argc,posicoes);
+				operador_atual(argv,argc);
 				
 				//se a operação atual for um || e resultado for negativo
 				//ou se a ultima operação for um && e resultado for positivo
@@ -262,7 +271,7 @@ int main(int argc, char **argv)
 				{
 					fd = executa_comando(cmd,1,&status,fd);
 				}	
-				operador_atual(argv,argc,posicoes);
+				operador_atual(argv,argc);
 			}
 			
 			//verifica se o comando é && e caso primeiro comando falhe
