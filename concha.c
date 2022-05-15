@@ -15,10 +15,10 @@
 
 int flag_pos=3, pos_atual=0 , tam_atual=0;
 
-// função para pegar as posições em linha de cada operador
+
 int quantidade_comandos(int argc, char **argv)
 {
-	int total_comandos = 1,i;
+	int total_comandos = 1, i;
 	flag_pos = 0;
 	//percorre a matriz de argumentos procurando por pipe (|), or (||)
 	// and (&&) e background (&)
@@ -34,9 +34,10 @@ int quantidade_comandos(int argc, char **argv)
 		}
 		else if(strcmp(argv[i] , "&") == 0)
 		{
-			//posicoes[total_comandos] = i;
-			//total_comandos ++;
-			flag_pos = 3;
+			flag_pos = 3; // Quando & é encontrado significa que não temos 
+				    // mais comandos além dele, então somente marcamos 
+				    // flag_pos com 3 para depois sabermos que ali havia 
+				    // um parâmetro de background.  
 		}
 		else if(strcmp(argv[i] , "&&") == 0)
 		{
@@ -44,10 +45,7 @@ int quantidade_comandos(int argc, char **argv)
 		}
 
 	}
-
-	//retorna o total de comandos que vão existir
 	return total_comandos;
-
 }
 
 //monta o comando atual dado a pos atual (linha atual)
@@ -206,11 +204,12 @@ char** novo_comando(char *entrada)
 
 int main(int argc, char **argv) 
 {
-	char **cmd, *cmd2;
-	int qt_comandos;
-	int aux=0;
-	int status=0, status_aux = -1;
-	int fd=0;
+	char **cmd; //Recebe o comando pronto para ser executado
+	int qt_comandos; // Armazena a quantidade de comandos, desconsiderando parâmetros
+	int aux=0; // Variável auxiliar para percorrer os comandos
+	int status=0, status_aux = -1; // Status: resultado do comando executado
+				 // Status_aux: Resultado do comando anterior ao que está em execução
+	int fd=0; //Recebe o valor do pipe de leitura
 
 
 	//temos apenas 1 comando
