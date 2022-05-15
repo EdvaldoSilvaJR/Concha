@@ -13,13 +13,13 @@
 // Se flag_pos == 3 então &  back
 
 
-int flag_pos=0, pos_atual=0 , tam_atual=0;
+int flag_pos=3, pos_atual=0 , tam_atual=0;
 
 // função para pegar as posições em linha de cada operador
-int posicoes_comandos(int argc, char **argv)
+int quantidade_comandos(int argc, char **argv)
 {
 	int total_comandos = 1,i;
-
+	flag_pos = 0;
 	//percorre a matriz de argumentos procurando por pipe (|), or (||)
 	// and (&&) e background (&)
 	for (i=0; i<argc; i++) 
@@ -178,53 +178,63 @@ int executa_comando(char **input, int flag, int *status, int fd)
 
 char** novo_comando(char *entrada)
 {
-	int i,j,cont ;
+	int i=0,j=0,cont ;
 	char **saida;
 	saida = calloc(tam_comando,sizeof(char) * tam_comando);
-	while(entrada[i] != NULL)
+	while(entrada[i] != '\0')
 	{
-		if(strcmp(entrada[i]," "))
+		if(entrada[i] == ' ')
 			cont++;
 
 		i++;
 	}
 
-	for(i=0;i<tam_comando;i++)
+	for(i=0;i<cont;i++)
 	{
-		comando[i] = calloc(tam_comando,sizeof(char)*tam_comando);
+		saida[i] = calloc(tam_comando,sizeof(char)*tam_comando);
+		while(entrada[j] != ' ')
+			saida[i][j] = entrada[j];
 	}
+	saida[cont] = calloc(tam_comando,sizeof(char)*tam_comando);	
+	saida[cont] = NULL;
 
-
+	tam_atual = cont;
+	return saida;
 
 }
 
 
 int main(int argc, char **argv) 
 {
-	char **cmd, **cmd2;
+	char **cmd, *cmd2;
 	int qt_comandos;
-	int i,aux=0;
+	int aux=0;
 	int status=0, status_aux = -1;
 	int fd=0;
 
 
-	qt_comandos = posicoes_comandos(argc, argv);
-	
 	//temos apenas 1 comando
-	if(qt_comandos == 1 && flag_pos!=3)
+	while(flag_pos == 3)
 	{
-		cmd = &argv[1];
-		execvp(cmd[0],cmd);
+		qt_comandos = quantidade_comandos(argc, argv);
+		
+		if(qt_comandos == 1 && flag_pos!=3)
+		{
+			cmd = &argv[1];
+			execvp(cmd[0],cmd);
+		}
+		else if(flag_pos == 3)
+		{
+			cmd = &argv[1];
+			fd = executa_comando(cmd,3,&status,fd);
+			scanf("digite um novo comando : %s \n",cmd2);
+			novo_comando(cmd2);
+			argc = tam_atual;
+		}
 	}
 	//temos caso de comando &
-	else if(flag_pos == 3)
-	{
-		cmd = &argv[1];
-		fd = executa_comando(cmd,3,&status,fd);
-		//criar novo argv
-	}
 	//teremos mais de um comando ,ou um dos comandos ficou de background
-	else if( flag_pos == 3 || qt_comandos > 1)
+	if( qt_comandos > 1)
 	{
 		while(aux<qt_comandos)
 		{
