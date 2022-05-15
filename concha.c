@@ -5,10 +5,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-
-
-
-
 #define tam_comando 100
 
 // Se flag_pos == 0 então |  pipe
@@ -18,15 +14,10 @@
 
 
 int flag_pos=0, pos_atual=0 , tam_atual=0;
-// status=0, status_aux=0;
-
-// vetor que será utilizado para criar pipe
-//int fd[2];
 
 // função para pegar as posições em linha de cada operador
 int posicoes_comandos(int argc, char **argv)
 {
-	posicoes[0] = 0 ;
 	int total_comandos = 1,i;
 
 	//percorre a matriz de argumentos procurando por pipe (|), or (||)
@@ -89,7 +80,6 @@ char **monta_comando(int argc, int total, char **argv)
 	}
 
 	comando[cont] = NULL;
-	
 	return comando;
 }
 
@@ -137,8 +127,6 @@ int executa_comando(char **input, int flag, int *status, int fd)
 			//primeiro comando
 			if(flag == 0)
 			{
-				printf("entrou no pipe primeiro \n" );
-				
 				close(fd2[0]);
 				dup2(fd2[1],STDOUT_FILENO);
 				close(fd2[1]);
@@ -146,59 +134,68 @@ int executa_comando(char **input, int flag, int *status, int fd)
 			//comando do meio
 			else if(flag == 1)
 			{
-				printf("entrou no pipe segundo \n" );
-				
-				//close(fd[1]);
 				dup2(fd,STDIN_FILENO);
-				//close(fd[0]);
 				dup2(fd2[1],STDOUT_FILENO);
 			}
 			//comando final
 			else if(flag == 2)
 			{
-				printf("entrou no pipe terceiro \n" );
-				
 				close(fd2[1]);
 				dup2(fd,STDIN_FILENO);
 				close(fd2[0]);
 			}
 		}
 
-		//close(fd[0]);
-		//close(fd[1]);
-
 		// se for o ultimo comando fecha o pipe para leitura
 
 		execvp(input[0],input);
 	}
-	//executa o comando no background
+	//executa o comando no background &
 	else if(flag_pos == 3)
 	{
-		waitpid(-1,&status,WNOHANG);
+		waitpid(-1,status,WNOHANG);
+		printf("Status do comando de background:%d \n",*status);
 	}
 	else
 	{
-
-		//retorna o descritor de arquivos na posição de leitura
-		//return fd[0];
-
-		//waitpid(processo, &retorno,0 );
-		//testar aqui !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// caso seja comando || ou &&
 		if(flag_pos != 0 && flag_pos != 3)
 		{
+			//pega o status de execução do filho para saber se deu certo
+			//ou errado
 			wait(status);
 			if(*status == 0)
 				*status = 1;
 			else
 				*status = 0;
-			//printf("Valor de status : %d \n",*status);		
 		}
-
-		//close(fd[0]);
 	}
 
 	close(fd2[1]);
+	//retorna o pipe
 	return fd2[0];
+}
+
+char** novo_comando(char *entrada)
+{
+	int i,j,cont ;
+	char **saida;
+	saida = calloc(tam_comando,sizeof(char) * tam_comando);
+	while(entrada[i] != NULL)
+	{
+		if(strcmp(entrada[i]," "))
+			cont++;
+
+		i++;
+	}
+
+	for(i=0;i<tam_comando;i++)
+	{
+		comando[i] = calloc(tam_comando,sizeof(char)*tam_comando);
+	}
+
+
+
 }
 
 
@@ -208,14 +205,10 @@ int main(int argc, char **argv)
 	int qt_comandos;
 	int i,aux=0;
 	int status=0, status_aux = -1;
-	
 	int fd=0;
 
+
 	qt_comandos = posicoes_comandos(argc, argv);
-
-	//printf("quantidade de comandos : %d \n", qt_comandos);
-
-	tam_atual = argc;
 	
 	//temos apenas 1 comando
 	if(qt_comandos == 1 && flag_pos!=3)
@@ -228,17 +221,14 @@ int main(int argc, char **argv)
 	{
 		cmd = &argv[1];
 		fd = executa_comando(cmd,3,&status,fd);
-		scanf("%s",argv);
+		//criar novo argv
 	}
-	//teremos mais de um comando
+	//teremos mais de um comando ,ou um dos comandos ficou de background
 	else if( flag_pos == 3 || qt_comandos > 1)
 	{
 		while(aux<qt_comandos)
 		{
-			//printf("aux :%d\n", aux);
 			cmd = monta_comando(argc,qt_comandos,argv);
-			//close(fd[0]);
-			//close(fd[1]);
 			//primeiro comando 
 			if(aux == 0)
 			{
@@ -273,17 +263,6 @@ int main(int argc, char **argv)
 				}	
 				operador_atual(argv,argc);
 			}
-			
-			//verifica se o comando é && e caso primeiro comando falhe
-			//não executa o segundo
-			//if(status != 0 && flag_pos == 2)
-			//	aux++;
-			// caso comando seja || e resultado do primeiro seja positivo,
-			//imprime o primeiro apenas
-			//else if(status == 0 && flag_pos == 1 )
-			//	aux++;
-
-
 
 			aux++;
 			status_aux = status;
@@ -292,7 +271,6 @@ int main(int argc, char **argv)
 	}
 	
 	
-	//close(fd[0]);
-	//close(fd[1]);
+	close(fd);
 	return 0;
 }
