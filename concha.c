@@ -16,12 +16,13 @@
 int flag_pos=3, pos_atual=0 , tam_atual=0;
 pid_t id_back ;
 
-// função para pegar as posições em linha de cada operador
+
 int quantidade_comandos(int argc, char **argv)
 {
-	int total_comandos = 1,i;
+	int total_comandos = 1, i;
 	flag_pos = 0;
-	//percorre a matriz de argumentos procurando por pipe (|), or (||)
+
+	// Percorre a matriz de argumentos procurando por pipe (|), or (||)
 	// and (&&) e background (&)
 	for (i=0; i<argc; i++) 
 	{
@@ -35,55 +36,54 @@ int quantidade_comandos(int argc, char **argv)
 		}
 		else if(strcmp(argv[i] , "&") == 0)
 		{
-			flag_pos = 3; // Quando & é encontrado significa que não temos 
-				    // mais comandos além dele, então somente marcamos 
-				    // flag_pos com 3 para depois sabermos que ali havia 
-				    // um parâmetro de background. 
+			flag_pos = 3; // Quando "&" é encontrado significa que não temos 
+					      // mais comandos além dele, então somente marcamos 
+					      // flag_pos com 3 para depois sabermos que ali havia 
+					      // um parâmetro de background. 
 		}
 		else if(strcmp(argv[i] , "&&") == 0)
 		{
 			total_comandos ++;
 		}
-
 	}
-
-	//retorna o total de comandos que vão existir
 	return total_comandos;
-
 }
 
-//monta o comando atual dado a pos atual (linha atual)
+
 char **monta_comando(int argc, int total, char **argv)
 {
-	int i,cont=0;
+	int i, cont=0;
 	char **comando;
+	tam_atual = 0;
+
 	comando = calloc(tam_comando,sizeof(char) * tam_comando);
 	for(i=0;i<tam_comando;i++)
 	{
 		comando[i] = calloc(tam_comando,sizeof(char)*tam_comando);
 	}
-	tam_atual = 0 ;
+
 			
-	for(i=pos_atual+1;i<argc;i++)
+	for(i=pos_atual+1; i<argc; i++)
 	{
 	
 		if(strcmp(argv[i],"|")==0 || strcmp(argv[i],"||")==0 || strcmp(argv[i],"&")==0 || strcmp(argv[i],"&&")==0)
 		{
-			pos_atual = i;
+			pos_atual = i; // Identifica a última linha do subcomando antes do parâmetro
 			break;
 		}
 		else
 		{
-			comando[cont] = strcat(comando[cont],argv[i]);
+			comando[cont] = strcat(comando[cont],argv[i]); 
 		}
 
-		tam_atual ++;
-		cont++;
+		tam_atual++; // Identifica o tamanho do comando atual
+		cont++; 
 	}
 
-	comando[cont] = NULL;
+	comando[cont] = NULL; // Execvp precisa que a última linha da matriz seja sempre NULL
 	return comando;
 }
+
 
 void operador_atual(char **argv, int argc)
 {
@@ -102,14 +102,14 @@ void operador_atual(char **argv, int argc)
 		flag_pos = 3;
 }
 
+
 //flag = indica se o comando é inicial, intermediário ou final
 int executa_comando(char **input, int flag, int *status, int fd)
 {
 	int processo , retorno;
 	int fd2[2];
 
-	pipe(fd2);
-
+	pipe(fd2); 
 	processo = fork();
 
 	if(processo<0)
@@ -117,111 +117,103 @@ int executa_comando(char **input, int flag, int *status, int fd)
 		perror("Problema com fork");
 		return -1;
 	}
-	printf("valor de flag %d\n",flag_pos);
 
-	// processo filho 
+	// Processo filho 
 	if(processo == 0 )
 	{
-		// operador pipe |
+		// Operador pipe |
 		if(flag_pos == 0)
 		{
-			//pipe(fd2);
-			//primeiro comando
+			// Primeiro comando
 			if(flag == 0)
 			{
-				close(fd2[0]);
-				dup2(fd2[1],STDOUT_FILENO);
-				close(fd2[1]);
+				close(fd2[0]); // Fecha a posição zero do pipe porque o primeiro comando não lê valores de lá 
+				dup2(fd2[1],STDOUT_FILENO); // Escreve o file descriptor do processo filho na posição 1 do pipe 
+				close(fd2[1]); // Fecha a posição de escrita
 			}
-			//comando do meio
+
+			// Comando do meio
 			else if(flag == 1)
 			{
 				dup2(fd,STDIN_FILENO);
 				dup2(fd2[1],STDOUT_FILENO);
+				// Como o comando intermediário lê e escreve do pipe, então não devemos fechar nenhuma posição do pipe 
 			}
-			//comando final
+
+			// Último comando
 			else if(flag == 2)
 			{
-				close(fd2[1]);
-				dup2(fd,STDIN_FILENO);
-				close(fd2[0]);
+				close(fd2[1]); // O último comando não escreve no pipe, logo podemos fechar a posição 1
+				dup2(fd, STDIN_FILENO); // Lê o file descriptor 
+				close(fd2[0]); // Fecha a posição de leitura
 			}
 		}
-		id_back = getpid();
-		
-		// se for o ultimo comando fecha o pipe para leitura
 
-		execvp(input[0],input);
+		id_back = getpid(); 
+
+		execvp(input[0],input); // Executa o comando por chamada de sistema
 	}
-	//executa o comando no background &
+
+	// Operador background &
 	else if(flag_pos == 3)
-	{
-		printf("Status do comando de background:%d e id %d \n",*status,id_back);
-		waitpid(-1,status,WNOHANG);
-	}
-	// caso seja comando || ou &&
-	//pega o status de execução do filho para saber se deu certo
-	//ou errado
+		waitpid(-1, status, WNOHANG); // Espera um processo filho executar 
+									  // WNOHANG continua mesmo que nenhum filho tenha terminado
+									  // -1 indica que pode ser o PID de qualquer filho
+									  // status: recebe o resultado do processo filho
+
+	// Operdores OR || e AND &&
 	else if(flag_pos != 0 && flag_pos != 3)
 	{
-		wait(status);
+		wait(status); // Verifica se o filho deu certo 
 		if(*status == 0)
 			*status = 1;
 		else
 			*status = 0;
-	
 	}
-	printf("Processo terminado\n");
 
-	close(fd2[1]);
-	//retorna o pipe
-	return fd2[0];
+	close(fd2[1]); 
+	return fd2[0]; // Retorna o conteúdo do pipe de escrita 
 }
 
-char** novo_comando(char *entrada)
+
+// Função utilizada para montar comandos quando o primeiro comando foi background &
+char** novo_comando(char *entrada) // Entrada: novo comando digitado, ele é lido como uma string, em apenas uma linha 
 {
-	int i=0,j=0,cont=1,k=0 ;
+	int i=0, j=0, cont=1, k=0 ;
 	char **saida;
 	saida = calloc(tam_comando,sizeof(char) * tam_comando);
 	
-	//while(entrada[i] != '\0')
+
 	for(i=0;i<strlen(entrada);i++)
 	{
-		if(entrada[i] == ' ')
+		if(entrada[i] == ' ') // Conta quantas palavras o comando possui
 			cont++;
 	}
 
 
+	// Faz a matriz de saída receber cada palavra do comando em uma linha, 
+	// passando a cada letra do comando armazenado em "entrada"
 	for(i=0;i<cont;i++)
 	{
 		saida[i] = calloc(tam_comando,sizeof(char)*tam_comando);
 		j=0;
 		while(entrada[k] != ' ')
 		{
-			if(entrada[k] != '"')
-			{
-				saida[i][j] = entrada[k];
-				j++;
-			}
+			saida[i][j] = entrada[k];
+			
+			j++;
 			k++;
 		}
 		k++;
 	}
 	saida[cont] = calloc(tam_comando,sizeof(char)*tam_comando);	
-	saida[cont] = NULL;
+	saida[cont] = NULL; // Finaliza a matriz de saída com NULL necessário ao comando execvp
 
-	tam_atual = cont;
-
-
-	printf("printando o comando novo \n");
-	for(i=0;i<cont;i++)
-	{
-		printf("%s \n",saida[i]);
-	}
+	tam_atual = cont; // Atualiza a variável global com o tamanho do nosso comando para, posteriormente, atualizar argc 
 
 	return saida;
-
 }
+
 
 void imprime_argv(int argc, char **argv)
 {
@@ -241,86 +233,75 @@ int main(int argc, char **argv)
 	char **cmd , cmd2[10000]; //Recebe o comando pronto para ser executado
 	int qt_comandos; // Armazena a quantidade de comandos, desconsiderando parâmetros
 	int aux=0; // Variável auxiliar para percorrer os comandos
-	int status=0, status_aux = -1; // Status: resultado do comando executado
-				 // Status_aux: Resultado do comando anterior ao que está em execução
-	int fd=0; //Recebe o valor do pipe de leitura
+	int status=0, status_aux=-1; // Status: resultado do comando executado
+				 				 // Status_aux: Resultado do comando anterior ao que está em execução (utilizado para || e &&)
+	int fd=0; // Recebe o valor do pipe de leitura
 
-	//temos apenas 1 comando
-	while(flag_pos == 3)
+
+	while(flag_pos == 3) // flag_pos sempre é inicializado com 3, o que pode indicar um background no comando ou ser apenas uma inicialização 
 	{
-		qt_comandos = quantidade_comandos(argc, argv);
-		printf("Quantidade de comandos %d\n",qt_comandos);
+		qt_comandos = quantidade_comandos(argc, argv); // Recebe a quantidade de subcomando presentes no comando 
 		
-		if(qt_comandos == 1 && flag_pos != 3)
+
+		// Na função quantidade_comandos a flag_pos é atualizada caso o comando não seja um background, e executa apenas um comando
+		if(qt_comandos == 1 && flag_pos != 3) 
 		{
-			cmd = &argv[1];
-			execvp(cmd[0], cmd);
+			cmd = &argv[1]; // argv na posição zero é o nome do executável 
+			execvp(cmd[0], cmd); 
 		}
-		else if(flag_pos == 3)
+
+		else if(flag_pos == 3) // Se a função não atualizou a flag, então se trata de um background
 		{
-			//cmd = monta_comando(argc,argc,argv);
-			argv[argc-1] = NULL;
-			cmd = &argv[1];
-			fd = executa_comando(cmd,3,&status,fd);
+			argv[argc-1] = NULL; // Substitui o & por NULL porque ali marca o final do comando 
+			cmd = &argv[1]; 
+			fd = executa_comando(cmd, 3, &status, fd); // Passa o comando para a função. 3 marcaria que este é um comando final mas
+													   // aqui ele é enviado apenas porque a função exige
 			
-			fgets(cmd2,100,stdin);
-			printf("valor do novo comando %s e valor flag:%d \n",cmd2,flag_pos);
-			argv = novo_comando(cmd2);
-			printf("tamanho atual :%d",tam_atual);
+			fgets(cmd2,100,stdin); // Pega o novo comando que o usuário digita 
+			argv = novo_comando(cmd2); // Manda o comando para a função que devolve ele em uma matriz igual a estrutura do argv
 			argc = tam_atual;
-			//flag_pos = 0;	
 		}
 	}
-	//temos caso de comando &
-	//teremos mais de um comando ,ou um dos comandos ficou de background
-	if( qt_comandos > 1)
+
+	if(qt_comandos > 1)
 	{
-		while(aux<qt_comandos)
+		while(aux < qt_comandos)
 		{
-			cmd = monta_comando(argc,qt_comandos,argv);
-			//primeiro comando 
+			cmd = monta_comando(argc, qt_comandos, argv); // Recebe o comando em apenas uma linha
+
+			// Primeiro comando 
 			if(aux == 0)
 			{
-				printf("comando primeiro \n");
-				operador_atual(argv,argc);
-				printf("flag_pos:%d e status_aux:%d \n",flag_pos,status_aux);
-				fd = executa_comando(cmd,0,&status,fd);
+				operador_atual(argv,argc); // Atualiza a flag_pos sobre o tipo de operador presente no comando 
+				fd = executa_comando(cmd, 0, &status, fd); // Recebe o descritor de arquivos presente na posição zero do pipe
 			}
 
-			//ultimo comando
+			// Último comando
 			else if (aux == qt_comandos-1)
 			{
-				printf("comando final , pos atual : %d\n",pos_atual);
-				printf("flag_pos:%d e status_aux:%d \n",flag_pos,status_aux);
 				operador_atual(argv,argc);
 				
-				//se a operação atual for um || e resultado for negativo
-				//ou se a ultima operação for um && e resultado for positivo
+				// Se o operador for um || e o resultado do comando anterior apresentou erro
+				// ou se o último operador for um && e o resultado do comando anterior for de êxito, o comando atual é executado 
 				if((flag_pos == 1 && status_aux == 0) || (flag_pos == 2 && status_aux == 1) || (flag_pos == 0))
-				{
-					fd = executa_comando(cmd,2,&status,fd);
-				}
+					fd = executa_comando(cmd, 2, &status, fd); // 2 indica para o executa_comando que este se trata de um comando final
 			}
-			//comando intermediário
+
+			// Comando intermediário
 			else
 			{
-				printf("comando intermediario \n");
-				printf("flag_pos:%d e status_aux:%d \n",flag_pos,status_aux);
 				if((flag_pos == 1 && status_aux == 0) || (flag_pos == 2 && status_aux == 1) || (flag_pos == 0))
-				{
-					fd = executa_comando(cmd,1,&status,fd);
-				}	
-				operador_atual(argv,argc);
+					fd = executa_comando(cmd, 1, &status, fd); // 1 indica para o executa_comando que este se trata de um comando intermediário
+
+				operador_atual(argv,argc); 
 			}
 
 			aux++;
-			status_aux = status;
-
+			status_aux = status; // Atualiza o status atual do comando que acabou de ser executado
 		}
 	}
 	
-	
-	close(fd);
+	close(fd); 
 	//kill(id_back,SIGSEGV);
 	return 0;
 }
